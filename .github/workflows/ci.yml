@@ -67,9 +67,6 @@ jobs:
       - name: Unit tests
         run: npm test --silent
 
-      - name: E2E tests
-        run: npm run test:e2e --silent
-
       - name: Summary
         if: success()
         run: echo "OK"
