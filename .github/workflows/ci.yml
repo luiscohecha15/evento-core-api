@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:6.0
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")' || exit 1"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping || exit 1"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      MONGODB_URI: mongodb://localhost:27017/eventi-core-api
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      PORT: 3000
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for MongoDB and Redis
+        run: |
+          set -eux
+          # Wait up to ~60s for both services to be available
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+            if nc -z localhost 27017 && nc -z localhost 6379; then
+              echo "MongoDB and Redis are up"
+              break
+            fi
+            echo "Waiting for MongoDB and Redis... ($i)"
+            sleep 2
+          done
+
+      - name: Lint (security)
+        run: npm run lint:security
+
+      - name: NPM audit (production deps only)
+        run: npm audit --production --audit-level=moderate
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test --silent
+
+      - name: E2E tests
+        run: npm run test:e2e --silent
+
+      - name: Summary
+        if: success()
+        run: echo "OK"
+
+      - name: Failure summary
+        if: failure()
+        run: echo "One or more steps failed in the CI pipeline" >&2
